@@ -122,7 +122,7 @@ def add_training_options(parser):
                        help="Which split to evaluate on during training.")
     group.add_argument("--eval_during_training", action='store_true',
                        help="If True, will run evaluation during training.")
-    group.add_argument("--eval_rep_times", default=3, type=int,
+    group.add_argument("--eval_rep_times", default=1, type=int,
                        help="Number of repetitions for evaluation loop during training.")
     group.add_argument("--eval_num_samples", default=1_000, type=int,
                        help="If -1, will use all samples in the specified split.")

@@ -1,7 +1,8 @@
 from model.mdm import MDM
 from diffusion import gaussian_diffusion as gd
-from diffusion.respace import SpacedDiffusion, space_timesteps
+from diffusion.respace import SpacedDiffusion, space_timesteps, DiffusersSpacedDiffusion
 from utils.parser_util import get_cond_mode
+from diffusion import diffusers_wrap
 
 
 def load_model_wo_clip(model, state_dict):
@@ -13,6 +14,7 @@ def load_model_wo_clip(model, state_dict):
 def create_model_and_diffusion(args, data):
     model = MDM(**get_model_args(args, data))
     diffusion = create_gaussian_diffusion(args)
+    # diffusion = create_DDPM_diffuser_diffusion(args)
     return model, diffusion
 
 
@@ -47,6 +49,44 @@ def get_model_args(args, data):
             'dropout': 0.1, 'activation': "gelu", 'data_rep': data_rep, 'cond_mode': cond_mode,
             'cond_mask_prob': args.cond_mask_prob, 'action_emb': action_emb, 'arch': args.arch,
             'emb_trans_dec': args.emb_trans_dec, 'clip_version': clip_version, 'dataset': args.dataset}
+
+
+def create_DDPM_diffuser_diffusion(args):
+    # default params
+    predict_xstart = True  # we always predict x_start (a.k.a. x0), that's our deal!
+    steps = 1000
+    scale_beta = 1.  # no scaling
+    timestep_respacing = ''  # can be used for ddim sampling, we don't use it.
+    learn_sigma = False
+    rescale_timesteps = False
+
+    betas = gd.get_named_beta_schedule(args.noise_schedule, steps, scale_beta)
+    loss_type = gd.LossType.MSE
+
+    if not timestep_respacing:
+        timestep_respacing = [steps]
+
+    return DiffusersSpacedDiffusion(
+        use_timesteps=space_timesteps(steps, timestep_respacing),
+        betas=betas,
+        model_mean_type=(
+            gd.ModelMeanType.EPSILON if not predict_xstart else gd.ModelMeanType.START_X
+        ),
+        model_var_type=(
+            (
+                gd.ModelVarType.FIXED_LARGE
+                if not args.sigma_small
+                else gd.ModelVarType.FIXED_SMALL
+            )
+            if not learn_sigma
+            else gd.ModelVarType.LEARNED_RANGE
+        ),
+        loss_type=loss_type,
+        rescale_timesteps=rescale_timesteps,
+        lambda_vel=args.lambda_vel,
+        lambda_rcxyz=args.lambda_rcxyz,
+        lambda_fc=args.lambda_fc,
+    )
 
 
 def create_gaussian_diffusion(args):
